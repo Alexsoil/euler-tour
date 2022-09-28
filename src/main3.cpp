@@ -5,11 +5,12 @@
 #include <boost/graph/connected_components.hpp>
 #include <boost/intrusive/rbtree.hpp>
 #include <boost/graph/kruskal_min_spanning_tree.hpp>
-
+#include <boost/intrusive/rbtree.hpp>
 #include <boost/graph/random.hpp>
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/graph/graphviz.hpp>
 
+#include <typeinfo>
 #include <iostream>
 #include <tuple>
 #include <vector>
@@ -151,6 +152,7 @@ class Tree {
                         auxiliaryEdges.push_back(boost::edge(*vi, *ai, m_graph).first);
                     }
                 }
+                boost::add_edge(*vi, *vi, m_Dgraph);
             }
 
             LOG("Auxiliary Edges");
@@ -265,8 +267,8 @@ void spanning_tree(Graph& graph) {
     Tree* a = new Tree(graph, component_vertex[0]);
     LOG("tree created");
     print_graph(a->get_graph());
+    LOG("Abnaroz");
     delete a;
-    
 
     // Tree a(graph, component_vertex[0]);
 

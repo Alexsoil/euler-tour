@@ -1,2 +1,5 @@
 LEDA
 .vscode
+src/outputfile
+src/*.svg
+src/*.out
