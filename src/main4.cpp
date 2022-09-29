@@ -10,6 +10,8 @@
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/graph/graphviz.hpp>
 
+// #include <LEDA/core/dynamic_trees.h>
+
 #include <typeinfo>
 #include <iostream>
 #include <tuple>
@@ -69,12 +71,10 @@ typedef boost::graph_traits<DGraph>::edge_iterator edge_itD;
 typedef boost::graph_traits<DGraph>::out_edge_iterator out_edge_itD;
 
 typedef std::pair<edge_itD, edge_itD> EdgePairD;
-
 typedef boost::property_map<DGraph, int EdgeInfo::*>::type WeightPrMapD;
 typedef boost::property_map<DGraph, int VertexInfo::*>::type VertexIdMapD;
 typedef boost::property_map<DGraph, int VertexInfo::*>::type VertexLabelMapD;
 
-std::vector<EdgeD> abnaroz(DGraph& G, VertexD x);
 
 int getLastElementNotEqualValue(std::vector<int>& vec, int value) {
     if (!vec.empty()) {
@@ -95,7 +95,14 @@ void graph_set_node_idD(DGraph& G, VertexIdMapD idmap);
 // Prints a list of all vertices, edges, and total number of each for graph G. Includes information stored in them too.
 void print_graph(Graph& G);
 
-void spanning_tree(Graph& graph);
+template <typename T>
+void print_vector(std::vector<T>& vec, const std::string& prefix, const std::string& postfix) {
+    std::cout << prefix;
+    for (size_t i = 0; i < vec.size(); i++) {
+        std::cout << vec[i] << postfix;
+    }
+    std::cout << std::endl;
+}
 
 
 class Tree {
@@ -130,9 +137,26 @@ class Tree {
             graph_set_weights(m_graph, m_weightMap, 1, MAX_WEIGHT);
 
             create_Dgraph();
+
+
+            create_euler_path();
         }
         ~Tree() {}
 
+        template <typename T>
+        void print_tree_vector(std::vector<T>& vec, const std::string& prefix, const std::string& postfix) {
+            std::cout << prefix;
+            for (size_t i = 0; i < vec.size(); i++) {
+                std::cout << m_stdLabelMap[vec[i]] << postfix;
+            }
+            std::cout << std::endl;
+        }
+
+
+
+        void printEulerPath() {
+            print_tree_vector<int>(m_eulerPath, "Euler Path", " ");
+        }
 
         Graph& get_graph() { return m_graph; }
     private:
@@ -196,6 +220,77 @@ class Tree {
             }
         }
 
+        void create_euler_path() {
+            
+            std::stack<int> s;
+            std::vector<EdgeD> visitedEdges;
+            std::vector<int> path;
+
+            s.push(0);
+
+            int root = 0;
+            out_edge_itD ef, ee;
+
+            std::map<int, int> node_roots;
+
+            while(!s.empty()) {
+                // std::string stringos;
+                // std::cin >> stringos;
+                int vertex = s.top();
+                s.pop();
+                std::vector<EdgeD> temp;
+
+                for (boost::tie(ef, ee) = out_edges(vertex, m_Dgraph);  ef != ee; ef++) {
+
+                    if ((std::find(auxiliaryEdgesD.begin(), auxiliaryEdgesD.end(), *ef) == auxiliaryEdgesD.end()) && 
+                        (std::find(visitedEdges.begin(), visitedEdges.end(), *ef) == visitedEdges.end()) && 
+                        getLastElementNotEqualValue(path, boost::target(*ef, m_Dgraph)) ) {
+                        temp.push_back(*ef);
+                        // LOG("added to temp " << *ef);
+                    }
+                }
+
+                if (!path.empty() && node_roots.find(vertex) == node_roots.end() && vertex != root) {
+                    // LOG(path.back());
+                    node_roots[vertex] = path.back();
+                    s.push(path.back());
+                }
+
+                if (std::find(visitedEdges.begin(), visitedEdges.end(), boost::edge(vertex, vertex, m_Dgraph).first) == visitedEdges.end()) {
+                    s.push(vertex);
+                }
+
+                for (size_t i = 0; i < temp.size(); i++) {
+                    // LOG(m_stdLabelMap[boost::source(temp[i], m_Dgraph)] << " " << m_stdLabelMap[boost::target(temp[i], m_Dgraph)]);
+                    // LOG("=");
+                    int v = boost::target(temp[i], m_Dgraph);
+                    if (v != vertex && v != node_roots[vertex]) {
+                        s.push(v);
+                    }
+                    visitedEdges.push_back(temp[i]);
+                }
+
+                path.push_back(vertex);
+
+                // std::cout << "Stack: ";
+                // printstack(s, m_stdLabelMap);
+                        
+            }
+
+            if (path.size() > 2) {
+                path.pop_back();
+            }
+
+            std::cout << "Path: ";
+            for (size_t i = 0; i < path.size(); i++) {
+                std::cout << m_stdLabelMap[path[i]] << " ";
+            }
+            std::cout << std::endl;
+
+            std::copy(path.begin(), path.end(), std::back_inserter(m_eulerPath));
+            return;
+        }
+
     public:
         Graph m_graph;
         WeightPrMap m_weightMap;
@@ -212,8 +307,18 @@ class Tree {
   
         std::vector<Edge> auxiliaryEdges;
         std::vector<EdgeD> auxiliaryEdgesD;
+
+        std::vector<int> m_eulerPath;
 };
 
+
+int reRootEuler(int vertex, std::vector<int>& eulerPath);
+int link(std::vector<std::vector<int>>& dynamicTreeVec, int u, int v);
+int cut(std::vector<std::vector<int>>& dynamicTreeVec, int u, int v);
+
+std::vector<Tree*> spanning_tree(Graph& graph);
+Tree* getTreeFromVertex(std::vector<Tree*>* treeVec, int vertex);
+int getTreeIndexFromVertex(std::vector<std::vector<int>>& dynamicTreeVec, int vertex);
 
 
 
@@ -264,12 +369,21 @@ std::vector<std::vector<int>> get_components(std::vector<int> component) {
     return result;
 }
 
+void printstack(std::stack<int> s, std::map<int, int> lmap) {
+    while (!s.empty()) {
+        std::cout << lmap[s.top()] << " ";
+        s.pop();
+    }
+    std::cout << std::endl;
+}
 
-void spanning_tree(Graph& graph) {
+std::vector<Tree*> spanning_tree(Graph& graph) {
     std::vector<int> component(boost::num_vertices(graph));
     int num = boost::connected_components(graph, &component[0]);
 
     std::vector<std::vector<int>> component_vertex = get_components(component);
+
+    std::vector<Tree*> tree_vector;
 
     for (size_t i = 0; i < component_vertex.size(); i++) {
         std::cout << i << ": ";
@@ -277,124 +391,72 @@ void spanning_tree(Graph& graph) {
             std::cout << component_vertex[i][j] << " ";
         }
         std::cout << std::endl;
+        
+        tree_vector.push_back(new Tree(graph, component_vertex[i]));
+        
     }
 
-    Tree* a = new Tree(graph, component_vertex[0]);
     LOG("tree created");
 
-    // LOG(boost::vertex(0, a->m_Dgraph));
-    
-    // std::stack<int> s;
-    // std::vector<EdgeD> visitedEdges;
-    // std::vector<int> path;
 
-    // s.push(0);
+    std::vector<std::vector<int>> dynamicTrees;
 
-    // int root = 0;
-    // out_edge_itD ef, ee;
-    
-    /*
-        TODO:
-        add map with node-> parent 
-
-    */
-
-    // typedef struct {
-    //     bool added = false;
-    //     int root;
-    // } nodeRoot;
-
-    // std::map<int, int> node_roots;
-
-    // while(!s.empty()) {
-    //     std::string stringos;
-    //     std::cin >> stringos;
-    //     int vertex = s.top();
-    //     s.pop();
-    //     std::vector<EdgeD> temp;
-
-
-    //     // LOG("seg1");
-    //     for (boost::tie(ef, ee) = out_edges(vertex, a->m_Dgraph);  ef != ee; ef++) {
-    //         // LOG("seg1.1");
-
-    //         if ((std::find(a->auxiliaryEdgesD.begin(), a->auxiliaryEdgesD.end(), *ef) == a->auxiliaryEdgesD.end()) && (std::find(visitedEdges.begin(), visitedEdges.end(), *ef) == visitedEdges.end()) && getLastElementNotEqualValue(path, boost::target(*ef, a->m_Dgraph)) ) {
-    //         // LOG("seg1.2");
-    //             temp.push_back(*ef);
-    //             LOG("added to temp " << *ef);
-    //         // LOG("seg1.3");
-    //         }
-    //         // LOG("seg1.4");
-    //     }
-    //     // LOG("seg2");
-
-    //     if (!path.empty() && node_roots.find(vertex) == node_roots.end() ) {
-    //         node_roots[vertex] = path.back();
-    //         LOG(path.back());
-    //         s.push(path.back());
-    //     }
-    //     if (std::find(visitedEdges.begin(), visitedEdges.end(), boost::edge(vertex, vertex, a->m_Dgraph).first) == visitedEdges.end()) {
-    //         s.push(vertex);
-    //     }
-    //     // LOG("seg3");
-    //     for (size_t i = 0; i < temp.size(); i++) {
-    //         LOG(a->m_stdLabelMap[boost::source(temp[i], a->m_Dgraph)] << " " << a->m_stdLabelMap[boost::target(temp[i], a->m_Dgraph)]);
-    //         LOG("=");
-    //         int v = boost::target(temp[i], a->m_Dgraph);
-    //         if (v != vertex) {
-    //             s.push(v);
-    //         }
-    //         visitedEdges.push_back(temp[i]);
-    //     }
-    //     // LOG("seg4");
-
-    //     path.emplace_back(vertex);
-    //     // LOG("seg5");
-
-    //     for (size_t i = 0; i < path.size(); i++) {
-    //         std::cout << a->m_stdLabelMap[path[i]] << " ";
-    //     }
-    //     std::cout << std::endl;
-                
+    for (Tree* a : tree_vector) {
+        a->printEulerPath();
         
-    // }
+        std::vector<int> eulerpath;
 
-    // for (size_t i = 0; i < path.size(); i++) {
-    //     std::cout << path[i] << " ";
-    // }
-    // std::cout << std::endl;
+        for (std::vector<int>::iterator it = a->m_eulerPath.begin(); it != a->m_eulerPath.end(); ++it) {
+            eulerpath.push_back(a->m_stdLabelMap[*it]);
+        }
+        // eulerpath.insert(eulerpath.end(), a->m_eulerPath.begin(), a->m_eulerPath.end());
+        dynamicTrees.push_back(eulerpath);
 
-
-    LOG("abnaroz time");
-
-
-    std::vector<EdgeD>* path2;
-    abnaroz(a->m_Dgraph, boost::vertex(0, a->m_Dgraph), path2);
-
-    // for (size_t i = 0; i < path2.size(); i++) {
-    //     LOG(path2[i]);
-    // }
-
-    delete a;
-
-    // Tree a(graph, component_vertex[0]);
+        std::cout << "____________" << std::endl;
+    }
 
 
-    return; 
+    LOG(" ");
+    print_vector<int>(dynamicTrees[0], "dt0: ", " ");
+    reRootEuler(2, dynamicTrees[0]);
+    print_vector<int>(dynamicTrees[0], "dt0: ", " ");
+
+
+    // link
+
+    if (dynamicTrees.size() >= 2) {
+        LOG("Dynamic Trees size: " << dynamicTrees.size());
+        print_vector<int>(dynamicTrees[0], "dt0: ", " ");
+        print_vector<int>(dynamicTrees[1], "dt1: ", " ");
+        if (!link(dynamicTrees, dynamicTrees[0][0], dynamicTrees[1][0])) {
+            print_vector<int>(dynamicTrees[0], "dt0: ", " ");
+            LOG("Dynamic Trees size: " << dynamicTrees.size());
+        } else {
+            LOG("ERROR on link");
+        }
+
+        if (!cut(dynamicTrees, dynamicTrees[0][1], dynamicTrees[0][2])) {
+            LOG("Dynamic Trees size: " << dynamicTrees.size());
+            for (size_t i = 0; i < dynamicTrees.size(); i++) {
+                print_vector<int>(dynamicTrees[i], "dt [i] ", " ");
+            }
+        } else {
+            LOG("ERROR on cut");
+        }
+
+    }
+
+
+
+    for (Tree* a : tree_vector) {
+        delete a;
+    }
+
+    return tree_vector; 
 }
 
 
-void abnaroz(DGraph& G, VertexD x, std::vector<EdgeD>* output){
-    out_edge_itD ei, ei_end;
-    for (boost::tie(ei, ei_end) = boost::out_edges(x, G); ei != ei_end; ei++){
-       abnaroz(G, boost::target(*ei, G));
-       output.push_back(*ei);
-    };
-}
-
-
-
-void xprint_graph(Graph& G) {
+void print_graph(Graph& G) {
     std::ofstream stream;
     stream.open("outputfile");
 
@@ -497,4 +559,123 @@ void graph_set_node_idD(DGraph& G, VertexIdMapD idmap) {
     for (vertex_itD vi = boost::vertices(G).first; vi != boost::vertices(G).second; vi++) {
         idmap[*vi] = *vi;
     }
+}
+
+int reRootEuler(int vertex, std::vector<int>& eulerPath) {
+    std::vector<int>::iterator newRoot = std::find(eulerPath.begin(), eulerPath.end(), vertex);
+
+    if (newRoot != eulerPath.end() && vertex != eulerPath[0]) {
+        std::vector<int> A (eulerPath.begin(), newRoot);
+        std::vector<int> B (newRoot, eulerPath.end());
+
+
+
+        A.erase(A.begin());// remove first element of A
+        A.push_back(vertex);
+        
+        print_vector<int>(A, "A: ", " ");
+        print_vector<int>(B, "B: ", " ");
+
+
+
+        eulerPath.clear();
+        eulerPath.insert(eulerPath.end(), B.begin(), B.end());
+        eulerPath.insert(eulerPath.end(), A.begin(), A.end());
+        
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
+int link(std::vector<std::vector<int>>& dynamicTreeVec, int u, int v) {
+    int uIndex = getTreeIndexFromVertex(dynamicTreeVec, u);
+    int vIndex = getTreeIndexFromVertex(dynamicTreeVec, v);
+    if (uIndex == -1 || vIndex == -1) {
+        return 1; // error
+    }
+
+    std::vector<int>::iterator uIt = std::find(dynamicTreeVec[uIndex].begin(), dynamicTreeVec[uIndex].end(), u);
+    std::vector<int>::iterator vIt = std::find(dynamicTreeVec[vIndex].begin(), dynamicTreeVec[vIndex].end(), v);
+
+    if (uIt != dynamicTreeVec[uIndex].end() && vIt != dynamicTreeVec[vIndex].end()) {
+        if(!reRootEuler(u, dynamicTreeVec[uIndex])) return 1;
+        if(!reRootEuler(v, dynamicTreeVec[vIndex])) return 1;
+
+        dynamicTreeVec[uIndex].push_back(u);
+        dynamicTreeVec[uIndex].push_back(v);
+        dynamicTreeVec[uIndex].insert(dynamicTreeVec[uIndex].end(), dynamicTreeVec[vIndex].begin(), dynamicTreeVec[vIndex].end());
+        dynamicTreeVec[uIndex].push_back(v);
+        dynamicTreeVec[uIndex].push_back(u);
+        
+        dynamicTreeVec.erase(dynamicTreeVec.begin() + vIndex);
+
+        return 0; // success
+    } else {
+        return 1;
+    }
+}
+
+int cut(std::vector<std::vector<int>>& dynamicTreeVec, int u, int v) {
+    int uIndex = getTreeIndexFromVertex(dynamicTreeVec, u);
+    int vIndex = getTreeIndexFromVertex(dynamicTreeVec, v);
+    
+    if (uIndex != vIndex || u == v) { // each vertex is in diff tree
+        return 1;
+    }
+
+    // find edges
+    std::vector<int>::iterator uvEdge = std::find(dynamicTreeVec[uIndex].begin(), dynamicTreeVec[uIndex].end(), u);
+    while(uvEdge != dynamicTreeVec[uIndex].end() && *(uvEdge + 1) != v) {
+        uvEdge = std::find(uvEdge + 1, dynamicTreeVec[uIndex].end(), u);
+    }
+
+    std::vector<int>::iterator vuEdge = std::find(dynamicTreeVec[uIndex].begin(), dynamicTreeVec[uIndex].end(), v);
+    while(vuEdge != dynamicTreeVec[uIndex].end() && *(vuEdge + 1) != u) {
+        vuEdge = std::find(vuEdge + 1, dynamicTreeVec[uIndex].end(), v);
+    }
+
+    if (vuEdge == dynamicTreeVec[uIndex].end() || uvEdge == dynamicTreeVec[uIndex].end() ) {
+        return 1;
+    }
+
+    std::vector<int> J(dynamicTreeVec[uIndex].begin(), uvEdge + 1);
+    std::vector<int> K(uvEdge + 1, vuEdge + 1);
+    std::vector<int> L(vuEdge + 1, dynamicTreeVec[uIndex].end());
+    print_vector(J, "J: ", " ");
+    print_vector(K, "K: ", " ");
+    print_vector(L, "L: ", " ");
+
+    J.pop_back();
+
+    std::vector<int> E1 = K;
+    std::vector<int> E2 = J;
+
+    E2.insert(E2.end(), L.begin(), L.end());
+
+    
+
+    dynamicTreeVec.erase(dynamicTreeVec.begin() + uIndex);
+    dynamicTreeVec.push_back(E1);
+    dynamicTreeVec.push_back(E2);
+
+    return 0;
+}
+
+Tree* getTreeFromVertex(std::vector<Tree*>& treeVec, int vertex) {
+    for(Tree* tree : treeVec) {
+        if (tree->m_stdIdMap.find(vertex) != tree->m_stdIdMap.end()) {
+            return tree;
+        }
+    }
+    return nullptr;
+}
+
+int getTreeIndexFromVertex(std::vector<std::vector<int>>& dynamicTreeVec, int vertex) {
+    for (size_t i = 0; i < dynamicTreeVec.size(); i++) {
+        if (std::find(dynamicTreeVec[i].begin(), dynamicTreeVec[i].end(), vertex) != dynamicTreeVec[i].end()) {
+            return i;
+        }
+    }
+    return -1;
 }
